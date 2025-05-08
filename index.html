@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Group Chat</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f5f7fa;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 500px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.08);
+      padding: 30px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #2e7d32;
+      margin-bottom: 20px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      opacity: 0.95;
+    }
+
+    #loginForm button {
+      background-color: #2e7d32;
+      color: white;
+    }
+
+    #chatSection button:first-of-type {
+      background-color: #1565c0;
+      color: white;
+    }
+
+    #chatSection button:last-of-type {
+      background-color: #d32f2f;
+      color: white;
+    }
+
+    #chatSection {
+      display: none;
+    }
+
+    #chat {
+      height: 300px;
+      overflow-y: auto;
+      background: #f1f1f1;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid #ccc;
+    }
+
+    .system {
+      text-align: center;
+      color: #666;
+      font-style: italic;
+      margin: 5px 0;
+    }
+
+    .userMessage {
+      margin-bottom: 10px;
+      padding: 10px;
+      background-color: #c8e6c9;
+      border-radius: 8px;
+    }
+
+    .otherUserMessage {
+      margin-bottom: 10px;
+      padding: 10px;
+      background-color: #d1c4e9;
+      border-radius: 8px;
+    }
+
+    .time {
+      font-size: 0.75em;
+      color: #888;
+      display: block;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 20px;
+      }
+
+      #chat {
+        height: 250px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Group Chat</h1>
+
+    <div id="loginForm">
+      <input type="text" id="usernameInput" placeholder="Enter username">
+      <button onclick="login()">Login / Register</button>
+    </div>
+
+    <div id="chatSection">
+      <div id="chat"></div>
+      <input type="text" id="msgInput" placeholder="Type a message...">
+      <button onclick="sendMessage()">Send</button>
+      <button onclick="leaveChat()">Leave Chat</button>
+    </div>
+  </div>
+
+  <script>
+    const ws = new WebSocket('ws://localhost:8088');
+    const chat = document.getElementById('chat');
+    const loginForm = document.getElementById('loginForm');
+    const chatSection = document.getElementById('chatSection');
+    const usernameInput = document.getElementById('usernameInput');
+    const msgInput = document.getElementById('msgInput');
+    let loggedIn = false;
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const msg = document.createElement('div');
+
+      if (data.system) {
+        msg.className = 'system';
+        msg.textContent = data.message;
+      } else {
+        msg.className = data.user === usernameInput.value.trim() ? 'userMessage' : 'otherUserMessage';
+        msg.innerHTML = `<strong>${data.user}:</strong> ${data.message}<span class="time">${new Date(data.time).toLocaleTimeString()}</span>`;
+      }
+
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+
+      if (data.system && data.message.startsWith('Logged in as')) {
+        loggedIn = true;
+        loginForm.style.display = 'none';
+        chatSection.style.display = 'block';
+        msgInput.focus();
+      }
+    };
+
+    function login() {
+      const username = usernameInput.value.trim();
+      if (!username) return;
+
+      if (ws.readyState !== 1) {
+        setTimeout(login, 100);
+        return;
+      }
+
+      ws.send(JSON.stringify({ type: 'auth', username }));
+    }
+
+    function sendMessage() {
+      const message = msgInput.value.trim();
+      if (message && loggedIn) {
+        ws.send(JSON.stringify({ type: 'chat', message }));
+        msgInput.value = '';
+      }
+    }
+
+    function leaveChat() {
+      ws.send(JSON.stringify({ type: 'leave' }));
+      loggedIn = false;
+      chat.innerHTML = '';
+      loginForm.style.display = 'block';
+      chatSection.style.display = 'none';
+      usernameInput.focus();
+    }
+
+    msgInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    usernameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') login();
+    });
+  </script>
+</body>
+</html>
